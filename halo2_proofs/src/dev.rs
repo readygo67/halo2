@@ -487,17 +487,17 @@ impl<F: Field + Ord> MockProver<F> {
         circuit: &ConcreteCircuit,
         instance: Vec<Vec<F>>,
     ) -> Result<Self, Error> {
-        let n = 1 << k;
+        let n = 1 << k; //行数，对应电路的加法门，乘法门的数量
 
         let mut cs = ConstraintSystem::default();
-        let config = ConcreteCircuit::configure(&mut cs);
+        let config = ConcreteCircuit::configure(&mut cs);  //配置cs约束系统
         let cs = cs;
 
         if n < cs.minimum_rows() {
             return Err(Error::not_enough_rows_available(k));
         }
 
-        if instance.len() != cs.num_instance_columns {
+        if instance.len() != cs.num_instance_columns {  //检查public input column的数量是否和电路中public input column相等
             return Err(Error::InvalidInstances);
         }
 
@@ -562,7 +562,9 @@ impl<F: Field + Ord> MockProver<F> {
             }
             v
         }));
-
+        // println!("fixed: {:?}", prover.fixed);
+        // println!("advice: {:?}", prover.advice);
+        // println!("instance: {:?}", prover.instance);
         Ok(prover)
     }
 

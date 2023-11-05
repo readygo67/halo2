@@ -39,10 +39,10 @@ impl<F: WithSmallOrderMulGroup<3>> EvaluationDomain<F> {
     /// values $j, k$.
     pub fn new(j: u32, k: u32) -> Self {
         // quotient_poly_degree * params.n - 1 is the degree of the quotient polynomial
-        let quotient_poly_degree = (j - 1) as u64;
+        let quotient_poly_degree = (j - 1) as u64;   //商多项式的次数
 
         // n = 2^k
-        let n = 1u64 << k;
+        let n = 1u64 << k;  //n=2^k
 
         // We need to work within an extended domain, not params.k but params.k + i
         // for some integer i such that 2^(params.k + i) is sufficiently large to
@@ -52,7 +52,7 @@ impl<F: WithSmallOrderMulGroup<3>> EvaluationDomain<F> {
             extended_k += 1;
         }
 
-        let mut extended_omega = F::ROOT_OF_UNITY;
+        let mut extended_omega = F::ROOT_OF_UNITY;  //extended_omega是扩展域（extended domain）中的单位根。
 
         // Get extended_omega, the 2^{extended_k}'th root of unity
         // The loop computes extended_omega = omega^{2 ^ (S - extended_k)}
@@ -68,7 +68,7 @@ impl<F: WithSmallOrderMulGroup<3>> EvaluationDomain<F> {
         //           = (omega^{2 ^ (S - extended_k)})  ^ {2 ^ (extended_k - k)}
         //           = omega ^ {2 ^ (S - k)}.
         // Notice that omega ^ {2^k} = omega ^ {2^S} = 1.
-        let mut omega = extended_omega;
+        let mut omega = extended_omega;  //omega是主要域（main domain）中的单位根
         for _ in k..extended_k {
             omega = omega.square();
         }

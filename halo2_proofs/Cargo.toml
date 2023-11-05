@@ -52,6 +52,8 @@ rand_core = { version = "0.6", default-features = false }
 tracing = "0.1"
 blake2b_simd = "1"
 maybe-rayon = {version = "0.1.0", default-features = false}
+rand ={version ="0.8.5"}
+hex = "0.4"
 
 # Developer tooling dependencies
 plotters = { version = "0.3.0", default-features = false, optional = true }
@@ -79,6 +81,7 @@ getrandom = { version = "0.2", features = ["js"] }
 default = ["batch", "multicore"]
 multicore = ["maybe-rayon/threads"]
 dev-graph = ["plotters", "tabbycat"]
+# dev-graph = ["halo2_proofs/dev-graph", "plotters", "plotters/bitmap_backend","plotters/bitmap_encoder"]
 test-dev-graph = [
     "dev-graph",
     "plotters/bitmap_backend",

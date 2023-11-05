@@ -346,7 +346,7 @@ mod tests {
         let chunk_size = 7;
 
         for rotation in [
-            Rotation(-6),
+            Rotation(-6),  //使用Rotation 取前6个值
             Rotation::prev(),
             Rotation::cur(),
             Rotation::next(),

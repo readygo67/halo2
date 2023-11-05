@@ -100,11 +100,6 @@ impl<F: Field> FieldChip<F> {
             // |-----|-----|-------|
             // | lhs | rhs | s_mul |
             // | out |     |       |
-            //
-            // Gates may refer to any relative offsets we want, but each distinct
-            // offset adds a cost to the proof. The most common offsets are 0 (the
-            // current row), 1 (the next row), and -1 (the previous row), for which
-            // `Rotation` has specific constructors.
             let lhs = meta.query_advice(advice[0], Rotation(0)/*Rotation::cur()*/);
             let rhs = meta.query_advice(advice[1], Rotation::cur());
             let out = meta.query_advice(advice[0], Rotation::next());
@@ -112,12 +107,6 @@ impl<F: Field> FieldChip<F> {
 
             // Finally, we return the polynomial expressions that constrain this gate.
             // For our multiplication gate, we only need a single polynomial constraint.
-            //
-            // The polynomial expressions returned from `create_gate` will be
-            // constrained by the proving system to equal zero. Our expression
-            // has the following properties:
-            // - When s_mul = 0, any value is allowed in lhs, rhs, and out.
-            // - When s_mul != 0, this constrains lhs * rhs = out.
             vec![s_mul * (lhs * rhs - out)] 
         });
 
@@ -213,26 +202,21 @@ impl<F: Field> NumericInstructions<F> for FieldChip<F> {
                 // cells at offsets 0 and 1.
                 config.s_mul.enable(&mut region, 0)?; //
 
-                // The inputs we've been given could be located anywhere in the circuit,
-                // but we can only rely on relative offsets inside this region. So we
-                // assign new cells inside the region and constrain them to have the
-                // same values as the inputs.
                 // 将a.0 复制到 第0行，config.advice[0]列
                 // 将b.0 复制到 第0行，config.advice[1]列
-                a.0.copy_advice(|| "lhs", &mut region, config.advice[0], 0)?;  //config.advice[0]列的第[0]行的值 = a.0
-                b.0.copy_advice(|| "rhs", &mut region, config.advice[1], 0)?;  //config.advice[1]列的第[0]行的值 = a.0
+                let a_cell=  a.0.copy_advice(|| "lhs", &mut region, config.advice[0], 0)?;  //config.advice[0]列的第[0]行的值 = a.0
+                let b_cell =  b.0.copy_advice(|| "rhs", &mut region, config.advice[1], 0)?;  //config.advice[1]列的第[0]行的值 = a.0
 
-                // Now we can assign the multiplication result, which is to be assigned
-                // into the output position.
                 let value = a.0.value().copied() * b.0.value();
 
-                // Finally, we do the assignment to the output, returning a
-                // variable to be used in another part of the circuit.
-                // Result 类型具有 map 方法，它允许您在 Result 包含成功值时对其进行操作，而忽略错误值。map 方法的作用是将 Result 中的成功值（Ok 的部分）应用于一个函数，并返回一个新的 Result，其中包含函数的返回值。如果 Result 包含错误值（Err 的部分），则 map 方法不执行任何操作，仅将错误值传递给新的 Result。
-                // assign_advice 的结果是 AssignedCell，再使用map 将其转换成Number类型, Number是一个AssignedCell的元组包装类型
-                region
-                    .assign_advice(|| "lhs * rhs", config.advice[0], 1, || value)
-                    .map(Number)
+                let c_cell = region
+                    .assign_advice(|| "lhs * rhs", config.advice[0], 1, || value)?;
+                
+                println!("a_cell {:?}", a_cell);
+                println!("b_cel {:?}l", b_cell);
+                println!("c_cell {:?}", c_cell);
+                
+                Ok(Number(c_cell))
             },
         )
     }
@@ -295,15 +279,6 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
         // 构建一个chip
         let field_chip = FieldChip::<F>::construct(config);
 
-        /*       a
-                 b
-
-            // | a0  | a1  | s_mul |
-            // |-----|-----|-------|
-            // | lhs | rhs | s_mul |
-            // | out |     |       |
-            //
-         */
         // Load our private values into the circuit.
         let a = field_chip.load_private(layouter.namespace(|| "load a"), self.a)?;
         let b = field_chip.load_private(layouter.namespace(|| "load b"), self.b)?;
@@ -312,18 +287,6 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
         let constant =
             field_chip.load_constant(layouter.namespace(|| "load constant"), self.constant)?;
 
-        // We only have access to plain multiplication.
-        // We could implement our circuit as:
-        //     asq  = a*a
-        //     bsq  = b*b
-        //     absq = asq*bsq
-        //     c    = constant*asq*bsq
-        //
-        // but it's more efficient to implement it as:
-        //     ab   = a*b
-        //     absq = ab^2
-        //     c    = constant*absq
-        // 计算过程，可以是为根据计算的值填充Cell
         let ab = field_chip.mul(layouter.namespace(|| "a * b"), a, b)?;
         let absq = field_chip.mul(layouter.namespace(|| "ab * ab"), ab.clone(), ab)?;
         let c = field_chip.mul(layouter.namespace(|| "constant * absq"), constant, absq)?;

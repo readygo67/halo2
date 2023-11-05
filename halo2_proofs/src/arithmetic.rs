@@ -370,16 +370,18 @@ fn log2_floor(num: usize) -> u32 {
 /// Returns coefficients of an n - 1 degree polynomial given a set of n points
 /// and their evaluations. This function will panic if two values in `points`
 /// are the same.
+/// points：对应x的值
+/// evals:对应y的值
 pub fn lagrange_interpolate<F: Field>(points: &[F], evals: &[F]) -> Vec<F> {
     assert_eq!(points.len(), evals.len());
     if points.len() == 1 {
         // Constant polynomial
-        vec![evals[0]]
+        vec![evals[0]] //一条平行于x轴的执行，y值为evals[0]
     } else {
-        let mut denoms = Vec::with_capacity(points.len());
+        let mut denoms = Vec::with_capacity(points.len()); //分母
         for (j, x_j) in points.iter().enumerate() {
             let mut denom = Vec::with_capacity(points.len() - 1);
-            for x_k in points
+            for x_k in points 
                 .iter()
                 .enumerate()
                 .filter(|&(k, _)| k != j)
@@ -437,16 +439,18 @@ fn test_lagrange_interpolate() {
 
     let points = (0..5).map(|_| Fp::random(rng)).collect::<Vec<_>>();
     let evals = (0..5).map(|_| Fp::random(rng)).collect::<Vec<_>>();
+    println!("points: {:?}", points);
+    println!("evals: {:?}", evals);
 
     for coeffs in 0..5 {
         let points = &points[0..coeffs];
         let evals = &evals[0..coeffs];
 
-        let poly = lagrange_interpolate(points, evals);
+        let poly = lagrange_interpolate(points, evals);  //生成多项式
         assert_eq!(poly.len(), points.len());
 
         for (point, eval) in points.iter().zip(evals) {
-            assert_eq!(eval_polynomial(&poly, *point), *eval);
+            assert_eq!(eval_polynomial(&poly, *point), *eval); //校验生成的多项式
         }
     }
 }

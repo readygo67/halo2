@@ -13,9 +13,11 @@ use crate::plonk::{Assigned, Error};
 /// - It provides pass-through implementations of common traits such as `Add` and `Mul`,
 ///   for improved usability.
 #[derive(Clone, Copy, Debug)]
+//inner是一个option, 
 pub struct Value<V> {
     inner: Option<V>,
 }
+
 
 impl<V> Default for Value<V> {
     fn default() -> Self {
@@ -25,6 +27,7 @@ impl<V> Default for Value<V> {
 
 impl<V> Value<V> {
     /// Constructs an unwitnessed value.
+    /// 返回inner是None的结构体，赋值语句
     pub const fn unknown() -> Self {
         Self { inner: None }
     }
@@ -38,6 +41,7 @@ impl<V> Value<V> {
     ///
     /// let v = Value::known(37);
     /// ```
+    /// 返回inner = value的结构体,赋值语句
     pub const fn known(value: V) -> Self {
         Self { inner: Some(value) }
     }
@@ -45,7 +49,8 @@ impl<V> Value<V> {
     /// Obtains the inner value for assigning into the circuit.
     ///
     /// Returns `Error::Synthesis` if this is [`Value::unknown()`].
-    pub(crate) fn assign(self) -> Result<V, Error> {
+    /// 类似于get，获取Value 内部的inner值，只有是known的时候才会返回值
+    pub fn assign(self) -> Result<V, Error> {
         self.inner.ok_or(Error::Synthesis)
     }
 
@@ -76,8 +81,8 @@ impl<V> Value<V> {
     /// # Panics
     ///
     /// Panics if `f` returns `false`.
-    pub fn assert_if_known<F: FnOnce(&V) -> bool>(&self, f: F) {
-        if let Some(value) = self.inner.as_ref() {
+    pub fn assert_if_known<F: FnOnce(&V) -> bool>(&self, f: F) { //F:是一个泛型，必需要实现FnOnce trait, 
+        if let Some(value) = self.inner.as_ref() {  //获取inner 的不可变引用
             assert!(f(value));
         }
     }
@@ -94,7 +99,7 @@ impl<V> Value<V> {
     }
 
     /// Maps a `Value<V>` to `Value<W>` by applying a function to the contained value.
-    pub fn map<W, F: FnOnce(V) -> W>(self, f: F) -> Value<W> {
+    pub fn map<W, F: FnOnce(V) -> W>(self, f: F) -> Value<W> { 
         Value {
             inner: self.inner.map(f),
         }

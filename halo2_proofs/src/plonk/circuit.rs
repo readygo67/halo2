@@ -23,7 +23,7 @@ pub trait ColumnType:
 /// A column with an index and type
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct Column<C: ColumnType> {
-    index: usize,
+    index: usize, //表示是第几个column，index=0, 表示为第0个column
     column_type: C,
 }
 
@@ -43,6 +43,7 @@ impl<C: ColumnType> Column<C> {
     }
 }
 
+//这段代码实现了一个比较函数，它首先比较两个Column 实例的column_type 字段，如果它们相等，则继续比较它们的index 字段。这种比较方式可以用于确定Column 实例的排序顺序，以满足一些特定需求，例如在布局操作中确保列的确定性顺序
 impl<C: ColumnType> Ord for Column<C> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // This ordering is consensus-critical! The layouters rely on deterministic column
@@ -83,7 +84,7 @@ pub enum Any {
     /// An Instance variant
     Instance,
 }
-
+// Column type的类型是按照 Instance < Advice < Fixed 排序。
 impl Ord for Any {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // This ordering is consensus-critical! The layouters rely on deterministic column
@@ -109,7 +110,7 @@ impl PartialOrd for Any {
     }
 }
 
-impl ColumnType for Advice {}
+impl ColumnType for Advice {}  //Advice 
 impl ColumnType for Fixed {}
 impl ColumnType for Instance {}
 impl ColumnType for Any {}
@@ -158,7 +159,7 @@ impl From<Column<Instance>> for Column<Any> {
         }
     }
 }
-
+//从Column<Any> 转换为Column<Advice>
 impl TryFrom<Column<Any>> for Column<Advice> {
     type Error = &'static str;
 
@@ -253,7 +254,7 @@ impl TryFrom<Column<Any>> for Column<Instance> {
 /// }
 /// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Selector(pub(crate) usize, bool);
+pub struct Selector(pub(crate) usize, bool); //Selecotr是一个元组结构体(index, is_simple)
 
 impl Selector {
     /// Enable this selector at the given offset within the given region.
@@ -346,8 +347,8 @@ pub trait Assignment<F: Field> {
     /// [`Layouter::assign_region`]: crate::circuit::Layouter#method.assign_region
     fn enter_region<NR, N>(&mut self, name_fn: N)
     where
-        NR: Into<String>,
-        N: FnOnce() -> NR;
+        NR: Into<String>,  //这是一个泛型参数，它表示一个可以转换成字符串的类型。
+        N: FnOnce() -> NR; //N是一个泛型参数，它表示一个闭包（函数对象）类型，该闭包不接受任何参数并返回类型为NR的值
 
     /// Exits the current region.
     ///
@@ -377,10 +378,10 @@ pub trait Assignment<F: Field> {
     /// Assign an advice column value (witness)
     fn assign_advice<V, VR, A, AR>(
         &mut self,
-        annotation: A,
-        column: Column<Advice>,
-        row: usize,
-        to: V,
+        annotation: A,  //A: 标注函数
+        column: Column<Advice>, //那一列
+        row: usize, //哪一行
+        to: V,  //to 应该改成value 似乎更贴切
     ) -> Result<(), Error>
     where
         V: FnOnce() -> Value<VR>,
@@ -463,6 +464,7 @@ pub trait FloorPlanner {
 /// This is a trait that circuits provide implementations for so that the
 /// backend prover can ask the circuit to synthesize using some given
 /// [`ConstraintSystem`] implementation.
+/// Circuit
 pub trait Circuit<F: Field> {
     /// This is a configuration object that stores things like columns.
     type Config: Clone;
@@ -486,7 +488,7 @@ pub trait Circuit<F: Field> {
 
 /// Low-degree expression representing an identity that must hold over the committed columns.
 #[derive(Clone)]
-pub enum Expression<F> {
+pub enum Expression<F> { //这个的目的是啥？
     /// This is a constant polynomial
     Constant(F),
     /// This is a virtual selector
@@ -511,6 +513,7 @@ impl<F: Field> Expression<F> {
     /// Evaluate the polynomial using the provided closures to perform the
     /// operations.
     #[allow(clippy::too_many_arguments)]
+    // 对expression 求值。
     pub fn evaluate<T>(
         &self,
         constant: &impl Fn(F) -> T,
@@ -719,7 +722,7 @@ impl<F: std::fmt::Debug> std::fmt::Debug for Expression<F> {
     }
 }
 
-impl<F: Field> Neg for Expression<F> {
+impl<F: Field> Neg for Expression<F> { //Expression 看起来像是arkworks中的linear combination
     type Output = Expression<F>;
     fn neg(self) -> Self::Output {
         Expression::Negated(Box::new(self))
@@ -756,6 +759,7 @@ impl<F: Field> Mul for Expression<F> {
     }
 }
 
+//标量乘
 impl<F: Field> Mul<F> for Expression<F> {
     type Output = Expression<F>;
     fn mul(self, rhs: F) -> Expression<F> {
@@ -837,8 +841,8 @@ impl<F: Field> From<Expression<F>> for Vec<Constraint<F>> {
 ///     Constraints::with_selector(
 ///         s_ternary,
 ///         std::array::IntoIter::new([
-///             ("a is boolean", a.clone() * one_minus_a.clone()),
-///             ("next == a ? b : c", next - (a * b + one_minus_a * c)),
+///             ("a is boolean", a.clone() * one_minus_a.clone()),  //  a * (1 - a) = 0, a 时一个bool变量
+///             ("next == a ? b : c", next - (a * b + one_minus_a * c)), 
 ///         ]),
 ///     )
 /// });
@@ -932,10 +936,10 @@ impl<F: Field> Gate<F> {
 /// permutation arrangements.
 #[derive(Debug, Clone)]
 pub struct ConstraintSystem<F: Field> {
-    pub(crate) num_fixed_columns: usize,
-    pub(crate) num_advice_columns: usize,
-    pub(crate) num_instance_columns: usize,
-    pub(crate) num_selectors: usize,
+    pub(crate) num_fixed_columns: usize,  //fixed 列数量
+    pub(crate) num_advice_columns: usize, //advice 列数量
+    pub(crate) num_instance_columns: usize, //instance 列数量
+    pub(crate) num_selectors: usize, //选择器数量
 
     /// This is a cached vector that maps virtual selectors to the concrete
     /// fixed column that they were compressed into. This is just used by dev
@@ -992,7 +996,7 @@ impl<'a, F: Field> std::fmt::Debug for PinnedGates<'a, F> {
             .finish()
     }
 }
-
+//
 impl<F: Field> Default for ConstraintSystem<F> {
     fn default() -> ConstraintSystem<F> {
         ConstraintSystem {
@@ -1377,14 +1381,14 @@ impl<F: Field> ConstraintSystem<F> {
         tmp
     }
 
-    /// Allocate a new advice column
+    /// Allocate a new advice column，分配一个advice column,
     pub fn advice_column(&mut self) -> Column<Advice> {
         let tmp = Column {
             index: self.num_advice_columns,
             column_type: Advice,
         };
         self.num_advice_columns += 1;
-        self.num_advice_queries.push(0);
+        self.num_advice_queries.push(0); //记录每一个adive clomn 被查询的次数
         tmp
     }
 
@@ -1544,4 +1548,55 @@ impl<'a, F: Field> VirtualCells<'a, F> {
             Any::Instance => self.query_instance(Column::<Instance>::try_from(column).unwrap(), at),
         }
     }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_column_compare(){
+        //Across column types, sort Instance < Advice < Fixed.
+        let c1 = Column::new(1, Any::Advice);
+        let c2 = Column::new(1, Any::Instance);
+        let res = c1.cmp(&c2);
+        println!("{:?}", res);
+        
+        let a = Any::Advice;
+        let f = Any::Instance;
+        let res = a.cmp(&f);
+        println!("{:?}", res);
+        
+    }
+
+    #[test]
+    fn test_column_from() {
+       let a = Any::from(Any::Advice);
+       println!("{:?}", a);
+    }
+
+    #[test]
+    fn test_cs_constraint1(){
+        use crate::poly::Rotation;
+        use crate::pasta::Fp;
+        use super::ConstraintSystem;
+
+        let mut cs = ConstraintSystem::<Fp>::default();
+        let a = cs.advice_column();
+        let b = cs.advice_column();
+        let s = cs.selector();
+
+        cs.create_gate("foo", |cs| {
+        let a = cs.query_advice(a, Rotation::cur());
+        let b = cs.query_advice(b, Rotation::cur());
+        let s = cs.query_selector(s);
+
+        // On rows where the selector is enabled, a is constrained to equal b.
+        // On rows where the selector is disabled, a and b can take any value.
+        vec![s * (a - b)]
+        });
+        println!("{:?}", cs);
+    }
+
 }

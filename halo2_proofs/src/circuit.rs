@@ -19,18 +19,21 @@ pub use table_layouter::TableLayouter;
 
 /// A chip implements a set of instructions that can be used by gadgets.
 ///
+/// chip 这个trait用Config和Loaded存储了综合时需要的配置信息和初始状态信息，同时提供了这两个信息的getter方法。
+/// 这应该是为综合提供的接口。
 /// The chip stores state that is required at circuit synthesis time in
 /// [`Chip::Config`], which can be fetched via [`Chip::config`].
 ///
 /// The chip also loads any fixed configuration needed at synthesis time
 /// using its own implementation of `load`, and stores it in [`Chip::Loaded`].
 /// This can be accessed via [`Chip::loaded`].
+/// Chip trait 中有两个关联类型Config/Loaded 保存synthesis 时需要的配置信息和fixed configuration。同时提供两个函数返回chip的config和loaded
 pub trait Chip<F: Field>: Sized {
     /// A type that holds the configuration for this chip, and any other state it may need
     /// during circuit synthesis, that can be derived during [`Circuit::configure`].
     ///
     /// [`Circuit::configure`]: crate::plonk::Circuit::configure
-    type Config: fmt::Debug + Clone;
+    type Config: fmt::Debug + Clone;    
 
     /// A type that holds any general chip state that needs to be loaded at the start of
     /// [`Circuit::synthesize`]. This might simply be `()` for some chips.
@@ -93,9 +96,9 @@ pub struct Cell {
     row_offset: usize,
     /// The column of this cell.
     column: Column<Any>,
-}
+}  //用region_index + row_offset + column 确定一个cell 
 
-/// An assigned cell.
+/// An assigned cell.  AssignedCell 应该包括advice, instance, fixed 
 #[derive(Clone, Debug)]
 pub struct AssignedCell<V, F: Field> {
     value: Value<V>,
@@ -160,7 +163,7 @@ where
     {
         let assigned_cell =
             region.assign_advice(annotation, column, offset, || self.value.clone())?;
-        region.constrain_equal(assigned_cell.cell(), self.cell())?;
+        region.constrain_equal(assigned_cell.cell(), self.cell())?;  //约束advice 相等
 
         Ok(assigned_cell)
     }
@@ -209,7 +212,7 @@ impl<'r, F: Field> Region<'r, F> {
     /// Even though `to` has `FnMut` bounds, it is guaranteed to be called at most once.
     pub fn assign_advice<'v, V, VR, A, AR>(
         &'v mut self,
-        annotation: A,
+        annotation: A, //nameSpace 
         column: Column<Advice>,
         offset: usize,
         mut to: V,
@@ -425,7 +428,7 @@ pub trait Layouter<F: Field> {
     ///     region.assign_advice(config.a, offset, || { Some(value)});
     /// });
     /// ```
-    fn assign_region<A, AR, N, NR>(&mut self, name: N, assignment: A) -> Result<AR, Error>
+    fn assign_region<A, AR, N, NR>(&mut self, name: N, assignment: A) -> Result<AR, Error>  //这个方法
     where
         A: FnMut(Region<'_, F>) -> Result<AR, Error>,
         N: Fn() -> NR,

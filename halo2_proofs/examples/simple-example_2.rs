@@ -7,20 +7,19 @@ use halo2_proofs::{
     poly::Rotation,
 };
 
+// 这个chip 支持的操作或者指令
 // ANCHOR: instructions
 trait NumericInstructions<F: Field>: Chip<F> {
     /// Variable representing a number.
     type Num;
 
     /// Loads a number into the circuit as a private input.
-    /// load_private 需要layouter 中的assign_region, assign_table, constrain_instance
     fn load_private(&self, layouter: impl Layouter<F>, a: Value<F>) -> Result<Self::Num, Error>;
 
     /// Loads a number into the circuit as a fixed constant.
     fn load_constant(&self, layouter: impl Layouter<F>, constant: F) -> Result<Self::Num, Error>;
 
-    /// Returns `c = a * b`. 
-    /// 非约束版本的数值计算。
+    /// Returns `c = a * b`.
     fn mul(
         &self,
         layouter: impl Layouter<F>,
@@ -42,7 +41,7 @@ trait NumericInstructions<F: Field>: Chip<F> {
 /// The chip that will implement our instructions! Chips store their own
 /// config, as well as type markers if necessary.
 struct FieldChip<F: Field>  {
-    config: FieldConfig, //FieldConfig 说明需要多少个adive, instance 和Fixed 列
+    config: FieldConfig,
     _marker: PhantomData<F>,
 }
 // ANCHOR_END: chip
@@ -55,7 +54,7 @@ struct FieldConfig {
     /// For this chip, we will use two advice columns to implement our instructions.
     /// These are also the columns through which we communicate with other parts of
     /// the circuit.
-    advice: [Column<Advice>; 2], 
+    advice: [Column<Advice>; 3],
 
     /// This is the public input (instance) column.
     instance: Column<Instance>,
@@ -68,7 +67,6 @@ struct FieldConfig {
 }
 
 impl<F: Field> FieldChip<F> {
-    //construct 配置chip 的静态配置
     fn construct(config: <Self as Chip<F>>::Config) -> Self {  
         Self {
             config,
@@ -76,10 +74,10 @@ impl<F: Field> FieldChip<F> {
         }
     }
 
-    //配置chip 
+    //配置chip 需要满足的约束
     fn configure(
         meta: &mut ConstraintSystem<F>,  //meta = arkworks中的cs
-        advice: [Column<Advice>; 2],
+        advice: [Column<Advice>; 3],
         instance: Column<Instance>,
         constant: Column<Fixed>,
     ) -> <Self as Chip<F>>::Config {
@@ -91,23 +89,22 @@ impl<F: Field> FieldChip<F> {
         let s_mul = meta.selector();
 
         // Define our multiplication gate!
-        //create_gate 创建custom gate, 这里的作用是, gate是约束的实现。
+        //create_gate 创建custom gate, 这里的作用是
         meta.create_gate("mul", |meta| {
             // To implement multiplication, we need three advice cells and a selector
             // cell. We arrange them like so:
             //
-            // | a0  | a1  | s_mul |
-            // |-----|-----|-------|
-            // | lhs | rhs | s_mul |
-            // | out |     |       |
+            // | a0  | a1  | a3    | s_mul |
+            // |-----|-----|-------|-------|
+            // | lhs | rhs | out   | s_mul |
             //
             // Gates may refer to any relative offsets we want, but each distinct
             // offset adds a cost to the proof. The most common offsets are 0 (the
             // current row), 1 (the next row), and -1 (the previous row), for which
             // `Rotation` has specific constructors.
-            let lhs = meta.query_advice(advice[0], Rotation(0)/*Rotation::cur()*/);
+            let lhs = meta.query_advice(advice[0], Rotation::cur());
             let rhs = meta.query_advice(advice[1], Rotation::cur());
-            let out = meta.query_advice(advice[0], Rotation::next());
+            let out = meta.query_advice(advice[2], Rotation::cur());
             let s_mul = meta.query_selector(s_mul);
 
             // Finally, we return the polynomial expressions that constrain this gate.
@@ -133,7 +130,7 @@ impl<F: Field> FieldChip<F> {
 // ANCHOR: chip-impl
 impl<F: Field> Chip<F> for FieldChip<F> {
     type Config = FieldConfig;
-    type Loaded = (); //综合时需要,可以理解为chip的初始状态
+    type Loaded = (); //综合时需要的
 
     fn config(&self) -> &Self::Config {
         &self.config
@@ -148,11 +145,11 @@ impl<F: Field> Chip<F> for FieldChip<F> {
 // ANCHOR: instructions-impl
 /// A variable representing a number.
 #[derive(Clone)]
-struct Number<F: Field>(AssignedCell<F, F>);  
+struct Number<F: Field>(AssignedCell<F, F>);
 
 // FieldChip 实现 NumericInstructions
 impl<F: Field> NumericInstructions<F> for FieldChip<F> {
-    type Num = Number<F>;  //Number<F>是
+    type Num = Number<F>;
 
     fn load_private(
         &self,
@@ -161,7 +158,6 @@ impl<F: Field> NumericInstructions<F> for FieldChip<F> {
     ) -> Result<Self::Num, Error> {
         let config = self.config();
 
-        //load_private 调用layouter中的assign_region, assign_region调用 
         layouter.assign_region(
             || "load private",
             |mut region| {
@@ -189,14 +185,6 @@ impl<F: Field> NumericInstructions<F> for FieldChip<F> {
         )
     }
 
-    /*
-        a
-        b
-
-        a        b 
-        value
-
-     */
     fn mul(
         &self,
         mut layouter: impl Layouter<F>,
@@ -211,16 +199,14 @@ impl<F: Field> NumericInstructions<F> for FieldChip<F> {
                 // We only want to use a single multiplication gate in this region,
                 // so we enable it at region offset 0; this means it will constrain
                 // cells at offsets 0 and 1.
-                config.s_mul.enable(&mut region, 0)?; //
+                config.s_mul.enable(&mut region, 0)?;
 
                 // The inputs we've been given could be located anywhere in the circuit,
                 // but we can only rely on relative offsets inside this region. So we
                 // assign new cells inside the region and constrain them to have the
                 // same values as the inputs.
-                // 将a.0 复制到 第0行，config.advice[0]列
-                // 将b.0 复制到 第0行，config.advice[1]列
-                a.0.copy_advice(|| "lhs", &mut region, config.advice[0], 0)?;  //config.advice[0]列的第[0]行的值 = a.0
-                b.0.copy_advice(|| "rhs", &mut region, config.advice[1], 0)?;  //config.advice[1]列的第[0]行的值 = a.0
+                a.0.copy_advice(|| "lhs", &mut region, config.advice[0], 0)?;
+                b.0.copy_advice(|| "rhs", &mut region, config.advice[1], 0)?;
 
                 // Now we can assign the multiplication result, which is to be assigned
                 // into the output position.
@@ -228,16 +214,13 @@ impl<F: Field> NumericInstructions<F> for FieldChip<F> {
 
                 // Finally, we do the assignment to the output, returning a
                 // variable to be used in another part of the circuit.
-                // Result 类型具有 map 方法，它允许您在 Result 包含成功值时对其进行操作，而忽略错误值。map 方法的作用是将 Result 中的成功值（Ok 的部分）应用于一个函数，并返回一个新的 Result，其中包含函数的返回值。如果 Result 包含错误值（Err 的部分），则 map 方法不执行任何操作，仅将错误值传递给新的 Result。
-                // assign_advice 的结果是 AssignedCell，再使用map 将其转换成Number类型, Number是一个AssignedCell的元组包装类型
                 region
-                    .assign_advice(|| "lhs * rhs", config.advice[0], 1, || value)
+                    .assign_advice(|| "lhs * rhs", config.advice[2], 0, || value)
                     .map(Number)
             },
         )
     }
 
-    // 约束num所在的Cell === 第row行，第config.instance 列
     fn expose_public(
         &self,
         mut layouter: impl Layouter<F>,
@@ -266,7 +249,6 @@ struct MyCircuit<F: Field> {
 
 impl<F: Field> Circuit<F> for MyCircuit<F> {
     // Since we are using a single chip for everything, we can just reuse its config.
-    //此电路只包含一个chip，因此可以复用它的config
     type Config = FieldConfig;
     type FloorPlanner = SimpleFloorPlanner;
 
@@ -276,7 +258,7 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
     //把本电路的的config，为chip 分配资源。
     fn configure(meta: &mut ConstraintSystem<F>) -> Self::Config {
         // We create the two advice columns that FieldChip uses for I/O.
-        let advice = [meta.advice_column(), meta.advice_column()];
+        let advice = [meta.advice_column(), meta.advice_column(), meta.advice_column()];
 
         // We also need an instance column to store public inputs.
         let instance = meta.instance_column();
@@ -292,18 +274,8 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
         config: Self::Config,
         mut layouter: impl Layouter<F>,
     ) -> Result<(), Error> {
-        // 构建一个chip
-        let field_chip = FieldChip::<F>::construct(config);
+        let field_chip = FieldChip::<F>::construct(config); //构造一个chip实例
 
-        /*       a
-                 b
-
-            // | a0  | a1  | s_mul |
-            // |-----|-----|-------|
-            // | lhs | rhs | s_mul |
-            // | out |     |       |
-            //
-         */
         // Load our private values into the circuit.
         let a = field_chip.load_private(layouter.namespace(|| "load a"), self.a)?;
         let b = field_chip.load_private(layouter.namespace(|| "load b"), self.b)?;
@@ -323,7 +295,6 @@ impl<F: Field> Circuit<F> for MyCircuit<F> {
         //     ab   = a*b
         //     absq = ab^2
         //     c    = constant*absq
-        // 计算过程，可以是为根据计算的值填充Cell
         let ab = field_chip.mul(layouter.namespace(|| "a * b"), a, b)?;
         let absq = field_chip.mul(layouter.namespace(|| "ab * ab"), ab.clone(), ab)?;
         let c = field_chip.mul(layouter.namespace(|| "constant * absq"), constant, absq)?;
@@ -383,8 +354,8 @@ mod tests {
 
         // Prepare the private and public inputs to the circuit!
         let constant = Fp::from(7);
-        let a = Fp::from(2);
-        let b = Fp::from(3);
+        let a = Fp::from(4);
+        let b = Fp::from(5);
         let c = constant * a.square() * b.square();
 
         // Instantiate the circuit with the private inputs.
@@ -400,9 +371,8 @@ mod tests {
 
         // Given the correct public input, our circuit will verify.
         let prover = MockProver::run(k, &circuit, vec![public_inputs.clone()]).unwrap();
-        prover.assert_satisfied();
-
-        // assert_eq!(prover.verify(), Ok(()));
+        assert_eq!(prover.verify(), Ok(()));
+        println!("verifiy success");
 
         // If we try some other public input, the proof will fail!
         public_inputs[0] += Fp::one();
